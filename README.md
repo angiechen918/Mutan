@@ -1,3 +1,6 @@
-# example
+README
 
-This package is meant to be an example package to serve as a template for the final project of the Physics 201: Data Analysis for Physical Sciences course at Harvard in Spring 2023.
+Mutan is designed to analyzes the high throughput sequencing data of mutagenesis libraries. Mutan it not yet published on pipy for installation.
+
+To contribute:
+$ git clone https://github.com/angiechen918/Mutan.git
