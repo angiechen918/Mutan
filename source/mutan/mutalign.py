@@ -4,9 +4,10 @@ from Bio import SeqIO
 import gzip
 import pandas as pd
 import csv
+from Bio import pairwise2
 
-
-def align_DNA(query, target, 
+def align_DNA(query, target,
+              alignment_method="pairwise2",
               mode='local', 
               match_score=1, 
               mismatch_score=-2, 
@@ -17,8 +18,11 @@ def align_DNA(query, target,
     
     Input: query -- Bio.Seq.Seq object, the sequencing read to map to target sequence
            target -- Bio.Seq.Seq object, the reference sequence.
+           alignment_method -- the method used to perform sequence alignment, "pairwise2" or "PairwiseAligner", "pairwise2" is the default
            mode -- parameter to pass to the biopython Bio.Align.PairwiseAligner object.
            match_score, mismatch_score, open_gap_score, extend_gap_score -- parameters to pass to the biopython Bio.Align.PairwiseAligner object.
+           
+    Output: alignment_lib -- A dictionary object containing the information to describe the DNA level mutations. 
               
     """
     
@@ -26,28 +30,73 @@ def align_DNA(query, target,
     read_seq = query.upper()
     reference_seq = target.upper()
     
-    # Create a PairwiseAligner object.
-    aligner = Align.PairwiseAligner(mode='local', 
-                                    match_score=match_score, 
-                                    mismatch_score=mismatch_score, 
-                                    open_gap_score=open_gap_score, 
-                                    extend_gap_score=extend_gap_score)
-    
+    if alignment_method=="PairwiseAligner":
+    ### Alignment using PairwiseAligner
+        # Create a PairwiseAligner object.
+        aligner = Align.PairwiseAligner(mode='local', 
+                                        match_score=match_score, 
+                                        mismatch_score=mismatch_score, 
+                                        open_gap_score=open_gap_score, 
+                                        extend_gap_score=extend_gap_score)
 
-    alignment = list(aligner.align(reference_seq, read_seq, strand='+'))[0]
-    alignment_r = list(aligner.align(reference_seq, read_seq, strand='-'))[0]
-    strand = 'forward'
-    alignment_start=alignment.indices[1][alignment.indices[1] > 0].min()
-    
-    if alignment_r.score > alignment.score:
-        strand = 'reverse'
-        alignment = alignment_r
-        read_seq = read_seq.reverse_complement()
-        alignment_start = len(read_seq) - alignment.indices[1][alignment.indices[1] > 0].max()
 
-    reference = alignment[0] # str, with '-' for insertion
-    query = alignment[1] # str, with '-' for deletion
-    alignment_length = len(alignment[0]) # alignment[0] is the target sequence, with '-' for insertsion
+        alignment = list(aligner.align(reference_seq, read_seq, strand='+'))[0]
+        alignment_r = list(aligner.align(reference_seq, read_seq, strand='-'))[0]
+        strand = 'forward'
+        alignment_start=alignment.indices[1][alignment.indices[1] > 0].min()
+
+        if alignment_r.score > alignment.score:
+            strand = 'reverse'
+            alignment = alignment_r
+            read_seq = read_seq.reverse_complement()
+            alignment_start = len(read_seq) - alignment.indices[1][alignment.indices[1] > 0].max()
+
+        reference = alignment[0] # str, with '-' for insertion
+        query = alignment[1] # str, with '-' for deletion
+        alignment_length = len(alignment[0]) # alignment[0] is the target sequence, with '-' for insertsion
+    
+    ### Alignment using PairwiseAligner done
+    
+    elif alignment_method=="pairwise2":
+    ### Alignment using pairwise2 localms
+    
+        # perform alignment
+        alignments = pairwise2.align.localms(read_seq, 
+                                             reference_seq, 
+                                             match_score, 
+                                             mismatch_score, 
+                                             open_gap_score, 
+                                             extend_gap_score, 
+                                             one_alignment_only=True)
+
+        alignments_r = pairwise2.align.localms(read_seq.reverse_complement(),
+                                               reference_seq, 
+                                               match_score, 
+                                               mismatch_score, 
+                                               open_gap_score, 
+                                               extend_gap_score, 
+                                               one_alignment_only=True)
+        strand = 'forward'
+
+        if alignments_r[0][2] > alignments[0][2]:
+            alignments = alignments_r
+            read_seq = read_seq.reverse_complement()
+            strand = 'reverse'
+
+        # Get the alignment with the highest score (assuming unique alignment)
+        best_alignment = alignments[0]
+
+        # Get the starting position
+        alignment_start = best_alignment[3]
+        alignment_end = best_alignment[4]
+
+        # Calculate alignment statistics
+        reference = best_alignment[1].strip('-')
+        # alignment_length = len(re.findall(r'ATG.*', reference)[0])
+        alignment_length = alignment_end - alignment_start
+        query = best_alignment[0][alignment_start: alignment_start+alignment_length]
+
+    ### Alignment using pairwise2 localms done
 
     insertions = []
     deletions = []
@@ -72,6 +121,7 @@ def align_DNA(query, target,
                    "substitutions": substitutions,
                    "num_substitutions":len(substitutions),
                    "strand":strand}
+    
     return alignment_lib
 
 
@@ -79,7 +129,8 @@ def align_DNA(query, target,
 def align_DNA_write_to_csv(input_file, 
                            output_file, 
                            target, 
-                           mode='local', 
+                           alignment_method="pairwise2",
+                           mode='local',
                            match_score=1, 
                            mismatch_score=-2, 
                            open_gap_score=-10, 
@@ -92,6 +143,7 @@ def align_DNA_write_to_csv(input_file,
     input: input_file -- str, input file path
            output_file -- str, output file path
            target -- Bio.Seq.Seq object, the reference sequence, to be passed into mutalign.align_DNA()
+           alignment_method -- the method used to perform sequence alignment, "pairwise2" or "PairwiseAligner", "pairwise2" is the default
            mode -- parameter to pass to the biopython Bio.Align.PairwiseAligner object, , to be passed into mutalign.align_DNA()
            match_score, mismatch_score, open_gap_score, extend_gap_score -- parameters to pass to the biopython Bio.Align.PairwiseAligner object, to be passed into mutalign.align_DNA()
            set_num_iterations -- bool, whether or not the user intends to set an upper limit on the number of entries to process, default is True. When set to false, the function processes the entire fastq.gz set.
@@ -110,7 +162,8 @@ def align_DNA_write_to_csv(input_file,
             for record in SeqIO.parse(handle, 'fastq'):
                 alignment_result = align_DNA(record.seq, 
                                              target=target,
-                                             mode=mode, 
+                                             alignment_method=alignment_method,
+                                             mode="local", 
                                              match_score=match_score, 
                                              mismatch_score=mismatch_score, 
                                              open_gap_score=open_gap_score, 
@@ -165,4 +218,5 @@ def align_all_DNA(file_path, target, exclude_short=False):
                 record_list.append(record_lib)
 
     return pd.DataFrame(record_list)
+
 
