@@ -49,7 +49,7 @@ def align_DNA(query, target,
             strand = 'reverse'
             alignment = alignment_r
             read_seq = read_seq.reverse_complement()
-            alignment_start = len(read_seq) - alignment.indices[1][alignment.indices[1] > 0].max()
+            alignment_start = len(read_seq) - alignment.indices[1][alignment.indices[1] > 0].max() -1 ## the -1 is important. Otherwise the alignments on the reverse strands will be shifted by one digit to miss the one bp on the 5' end and gain one bp on the 3' end.
 
         reference = alignment[0] # str, with '-' for insertion
         query = alignment[1] # str, with '-' for deletion
@@ -110,7 +110,7 @@ def align_DNA(query, target,
         elif (query[j] != reference[j]):
             substitutions.append(reference[j]+str(j)+query[j])
 
-    alignment_lib={"sequence": read_seq,
+    alignment_lib={"sequence": read_seq[alignment_start:alignment_start+alignment_length-len(deletions)],
                    "read_length": len(read_seq),
                    "alignment_start": alignment_start,
                    "alignment_length": alignment_length,
@@ -168,8 +168,14 @@ def align_DNA_write_to_csv(input_file,
                                              mismatch_score=mismatch_score, 
                                              open_gap_score=open_gap_score, 
                                              extend_gap_score=extend_gap_score)  # Assuming `target_sequence` is defined
+                
+                alignment_start=alignment_result["alignment_start"]
+                alignment_length=alignment_result["alignment_length"]
+                num_deletions=alignment_result["num_deletions"]
+                # read_seq[alignment_start:alignment_start+alignment_length-num_deletions]
+                
                 alignment_result.update({'sequence_id':record.id})
-                alignment_result.update({'quality':record.letter_annotations["phred_quality"]})
+                alignment_result.update({'quality':record.letter_annotations["phred_quality"][alignment_start:alignment_start+alignment_length-num_deletions]})
                 
                 if ct == 0: # first iteration writes the header
                     writer = csv.DictWriter(csv_file, fieldnames=alignment_result.keys())
@@ -218,5 +224,6 @@ def align_all_DNA(file_path, target, exclude_short=False):
                 record_list.append(record_lib)
 
     return pd.DataFrame(record_list)
+
 
 

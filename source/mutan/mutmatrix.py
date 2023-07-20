@@ -104,7 +104,12 @@ def plot_mut_loc_matrix(df_matrix_mutto_loc,
     value = 0
 
     masked_array = np.ma.masked_where(data == value, data)
-    cmap = mpl.cm.get_cmap("Spectral_r").copy()
+    # Get the Spectral_r colormap
+    spectral_r_cmap = mpl.cm.get_cmap("Spectral_r")
+
+    # Create a new colormap based on the Spectral_r colormap
+    cmap = mpl.colors.LinearSegmentedColormap.from_list("Spectral_r_copy",
+                                                        spectral_r_cmap(np.linspace(0, 1, 256)))
     cmap.set_bad(color='black')
     
     gcf = ax.imshow(masked_array, cmap =cmap, **kwargs)
@@ -188,7 +193,13 @@ def plot_matrix_mutto_AA(df_matrix_mutto_AA,
     value = 0
 
     masked_array = np.ma.masked_where(data == value, data)
-    cmap = mpl.cm.get_cmap("Spectral_r").copy()
+    # Get the Spectral_r colormap
+    spectral_r_cmap = mpl.cm.get_cmap("Spectral_r")
+
+    # Create a new colormap based on the Spectral_r colormap
+    cmap = mpl.colors.LinearSegmentedColormap.from_list("Spectral_r_copy",
+                                                        spectral_r_cmap(np.linspace(0, 1, 256)))
+    
     cmap.set_bad(color='black')
     #############
 
@@ -278,7 +289,13 @@ def plot_matrix_mutto_AA_norm(df_matrix_mutto_AA,
     data=(AA_to_AA[:-1,:]/(reference_AA_ct[:-1]).reshape(-1,1)).transpose()
     
     masked_array = np.ma.masked_where(data == value, data)
-    cmap = mpl.cm.get_cmap("Spectral_r").copy()
+    # Get the Spectral_r colormap
+    spectral_r_cmap = mpl.cm.get_cmap("Spectral_r")
+
+    # Create a new colormap based on the Spectral_r colormap
+    cmap = mpl.colors.LinearSegmentedColormap.from_list("Spectral_r_copy",
+                                                        spectral_r_cmap(np.linspace(0, 1, 256)))
+    
     cmap.set_bad(color='black')
 
     gcf = ax.imshow(masked_array, cmap =cmap, **kwargs) ## plot 'mutate from' on the x axis, 'mutate to' on the y axis
@@ -445,5 +462,6 @@ def theoretical_epPCR_matrices_mutto(reference_seq,
         
         
         
+
 
 

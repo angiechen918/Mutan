@@ -36,7 +36,8 @@ def translate_to_aa(row):
     """
     sequence= row['sequence']
     seq = Seq(sequence).upper() 
-    start = row['alignment_start']
+    # start = row['alignment_start'] # To reduce the size of pandas dataframe, modified the alignment .csv file for the stored sequence to start only from the aligned region.
+    start = 0
     start_codon = 'ATG'
     start_index = seq.find(start_codon, start = int(start))
     
@@ -201,4 +202,5 @@ def AA_analaysis_for_DNA_alignment(target,
         df.to_csv(output_file)
     
     return df
+
 
