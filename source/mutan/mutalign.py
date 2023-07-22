@@ -5,6 +5,9 @@ import gzip
 import pandas as pd
 import csv
 from Bio import pairwise2
+from itertools import islice
+import time
+import multiprocessing
 
 def align_DNA(query, target,
               alignment_method="pairwise2",
@@ -126,6 +129,7 @@ def align_DNA(query, target,
 
 
 
+    
 def align_DNA_write_to_csv(input_file, 
                            output_file, 
                            target, 
@@ -136,6 +140,7 @@ def align_DNA_write_to_csv(input_file,
                            open_gap_score=-10, 
                            extend_gap_score=-1,
                            set_num_iterations=True,
+                           start_read=0,
                            num_iterations=500):
     """
     Function that reads in sequences from a .fastq.gz file, perform alignment and save each entry to .csv at a time. 
@@ -147,6 +152,7 @@ def align_DNA_write_to_csv(input_file,
            mode -- parameter to pass to the biopython Bio.Align.PairwiseAligner object, , to be passed into mutalign.align_DNA()
            match_score, mismatch_score, open_gap_score, extend_gap_score -- parameters to pass to the biopython Bio.Align.PairwiseAligner object, to be passed into mutalign.align_DNA()
            set_num_iterations -- bool, whether or not the user intends to set an upper limit on the number of entries to process, default is True. When set to false, the function processes the entire fastq.gz set.
+           start_iter -- int, the index of read to start reading.
            num_iterations -- int, to be set if set_num_iterations is True. Default is 500
     
     """
@@ -159,15 +165,45 @@ def align_DNA_write_to_csv(input_file,
                 
         ct=0        
         with gzip.open(input_file, "rt") as handle:
-            for record in SeqIO.parse(handle, 'fastq'):
-                alignment_result = align_DNA(record.seq, 
-                                             target=target,
-                                             alignment_method=alignment_method,
-                                             mode="local", 
-                                             match_score=match_score, 
-                                             mismatch_score=mismatch_score, 
-                                             open_gap_score=open_gap_score, 
-                                             extend_gap_score=extend_gap_score)  # Assuming `target_sequence` is defined
+            seq_iter=SeqIO.parse(handle, 'fastq')
+            if start_read !=0:
+                seq_iter=islice(seq_iter, start_read, None)
+            for record in seq_iter:
+                
+                try:
+                    # prioritize the alignment method specified by user, 
+                    # using multithread to eliminate sequences causing dead kernal.
+                    # Use multiprocessing to run PairwiseAligner with a timeout. The processing time increases 10% for each sequence. multithreading is more lightweight but really doesn't prevent the kernel from dying.
+                    pool = multiprocessing.Pool(processes=1)
+                    aligner_result = pool.apply_async(align_DNA, args=(record.seq, target),
+                                                     kwds={'alignment_method':'PairwiseAligner',
+                                                           'mode':mode,
+                                                           'match_score':match_score,
+                                                           'mismatch_score':mismatch_score,
+                                                           'open_gap_score':open_gap_score,
+                                                           'extend_gap_score':extend_gap_score})
+                    alignment_result = aligner_result.get(timeout=5)  # Set an appropriate timeout value
+                    pool.terminate()  # Terminate the process to free up resources
+                except multiprocessing.TimeoutError:
+                    # In case of timeout, use pairwise2 aligner instead
+                    alignment_result = align_DNA(record.seq, target,
+                                                    alignment_method='pairwise2',
+                                                    mode=mode,
+                                                    match_score=match_score,
+                                                    mismatch_score=mismatch_score,
+                                                    open_gap_score=open_gap_score,
+                                                    extend_gap_score=extend_gap_score)
+                        
+                except MemoryError:  # if pairwisealigner generates a memory error, use pairsise2
+                    alignment_result = align_DNA(record.seq, 
+                                                 target=target,
+                                                 alignment_method='pairwise2',
+                                                 mode=mode, 
+                                                 match_score=match_score, 
+                                                 mismatch_score=mismatch_score, 
+                                                 open_gap_score=open_gap_score, 
+                                                 extend_gap_score=extend_gap_score)  # Assuming `target_sequence` is defined
+                    
                 
                 alignment_start=alignment_result["alignment_start"]
                 alignment_length=alignment_result["alignment_length"]

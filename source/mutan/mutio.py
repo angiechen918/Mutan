@@ -62,6 +62,3 @@ def fastq_extract_seq(file_path:str, n=0):
         query_seq = next(islice(query_seqs , n, None))
     
     return query_seq.upper()
-    
-
-
